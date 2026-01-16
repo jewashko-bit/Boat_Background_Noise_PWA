@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0c10" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <title>Boat Background Noise PWA</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#0b0c10; }
+    body { margin: 16px; max-width: 980px; }
+    h1 { margin:0 0 6px; font-size: 20px; }
+    .sub { color:#444; font-size: 12.5px; line-height:1.35; margin-bottom: 12px; }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin: 10px 0 14px; }
+    button { padding:10px 12px; border-radius:12px; border:1px solid #bbb; background:#f7f7f7; font-weight:650; }
+    button.primary { background:#0b0c10; color:#fff; border-color:#0b0c10; }
+    button:disabled { opacity: 0.55; }
+    .card { border:1px solid #ddd; border-radius:12px; padding:12px; background:#fff; margin-bottom: 12px; }
+    .row { display:grid; grid-template-columns: 180px 1fr 90px; gap:10px; align-items:center; margin: 10px 0; }
+    label { font-size: 13px; }
+    input[type="range"] { width: 100%; }
+    select { width:100%; padding:7px 8px; border:1px solid #ccc; border-radius:10px; font-size: 13px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: 12px; }
+    .status { font-size: 13px; }
+    .warn { color:#8a2a2a; font-size: 12.5px; line-height: 1.35; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Boat Noise PWA (Streaming, Naturalized)</h1>
+  <div class="sub">
+    Uses micro-jitter, combustion turbulence (pink noise), clatter, resonance drift, and a tiny early-reflection space for a less electronic sound.
+    If there’s no sound: press <b>Test Tone</b> first. Use <b>Reset Cache</b> if the UI won’t respond.
+  </div>
+
+  <div class="actions">
+    <button id="btnStart" class="primary">Start</button>
+    <button id="btnStop" disabled>Stop</button>
+    <button id="btnTest">Test Tone</button>
+    <button id="btnReset">Reset Cache</button>
+    <span id="status" class="status">Ready.</span>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 10px;">Engine Model</h3>
+    <div class="row">
+      <label>Preset</label>
+      <select id="preset"></select>
+      <span></span>
+    </div>
+    <div class="sub">
+      Presets adjust cylinder count and baseline exhaust/turbo character. Fine-tune below.
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 10px;">Mix</h3>
+    <div class="row"><label>Master</label><input id="master" type="range" min="0" max="1" step="0.01" value="0.70"><span id="masterV" class="mono"></span></div>
+    <div class="row"><label>Engine Bed</label><input id="engine" type="range" min="0" max="1" step="0.01" value="0.28"><span id="engineV" class="mono"></span></div>
+    <div class="row"><label>Exhaust</label><input id="exhaust" type="range" min="0" max="1" step="0.01" value="0.55"><span id="exhaustV" class="mono"></span></div>
+    <div class="row"><label>Turbo</label><input id="turbo" type="range" min="0" max="1" step="0.01" value="0.18"><span id="turboV" class="mono"></span></div>
+    <div class="row"><label>Waves</label><input id="waves" type="range" min="0" max="1" step="0.01" value="0.10"><span id="wavesV" class="mono"></span></div>
+    <div class="row"><label>Current</label><input id="current" type="range" min="0" max="1" step="0.01" value="0.10"><span id="currentV" class="mono"></span></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 10px;">Core Engine</h3>
+    <div class="row"><label>RPM</label><input id="rpm" type="range" min="300" max="2200" step="10" value="800"><span id="rpmV" class="mono"></span></div>
+    <div class="row"><label>Load</label><input id="load" type="range" min="0" max="1" step="0.01" value="0.50"><span id="loadV" class="mono"></span></div>
+    <div class="row"><label>Roughness (slow wobble)</label><input id="rough" type="range" min="0" max="1" step="0.01" value="0.35"><span id="roughV" class="mono"></span></div>
+    <div class="row"><label>Thump (pulse body)</label><input id="thump" type="range" min="0" max="1" step="0.01" value="0.55"><span id="thumpV" class="mono"></span></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 10px;">Naturalness Controls</h3>
+    <div class="row"><label>Rasp (turbulence)</label><input id="rasp" type="range" min="0" max="1" step="0.01" value="0.35"><span id="raspV" class="mono"></span></div>
+    <div class="row"><label>Clatter (mechanical)</label><input id="clatter" type="range" min="0" max="1" step="0.01" value="0.18"><span id="clatterV" class="mono"></span></div>
+    <div class="row"><label>Resonance Drift</label><input id="drift" type="range" min="0" max="1" step="0.01" value="0.25"><span id="driftV" class="mono"></span></div>
+    <div class="row"><label>Space (early reflections)</label><input id="space" type="range" min="0" max="1" step="0.01" value="0.10"><span id="spaceV" class="mono"></span></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 10px;">Exhaust Note</h3>
+    <div class="row"><label>Muffling</label><input id="muffle" type="range" min="0" max="1" step="0.01" value="0.62"><span id="muffleV" class="mono"></span></div>
+    <div class="row"><label>Formant A (Hz)</label><input id="formA" type="range" min="60" max="650" step="5" value="140"><span id="formAV" class="mono"></span></div>
+    <div class="row"><label>Formant B (Hz)</label><input id="formB" type="range" min="150" max="1400" step="10" value="420"><span id="formBV" class="mono"></span></div>
+    <div class="row"><label>Formant Q</label><input id="formQ" type="range" min="0.5" max="18" step="0.1" value="7.0"><span id="formQV" class="mono"></span></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 10px;">Turbo</h3>
+    <div class="row"><label>Turbo Base Freq</label><input id="turboFreq" type="range" min="200" max="4200" step="10" value="1200"><span id="turboFreqV" class="mono"></span></div>
+    <div class="row"><label>Spool Mod</label><input id="turboSpool" type="range" min="0" max="1" step="0.01" value="0.20"><span id="turboSpoolV" class="mono"></span></div>
+    <div class="row"><label>Turbo Hiss</label><input id="turboHiss" type="range" min="0" max="1" step="0.01" value="0.28"><span id="turboHissV" class="mono"></span></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 10px;">Water</h3>
+    <div class="row"><label>Wave Chop Rate</label><input id="chop" type="range" min="0.01" max="0.35" step="0.01" value="0.07"><span id="chopV" class="mono"></span></div>
+    <div class="row"><label>Current Brightness</label><input id="bright" type="range" min="0" max="1" step="0.01" value="0.35"><span id="brightV" class="mono"></span></div>
+  </div>
+
+  <div class="warn">
+    iOS: open the <b>GitHub Pages URL in Safari</b> (not inside the GitHub app). Turn Silent mode off. Tap Start once.
+  </div>
+
+<script>
+  // Register SW (safe even if it fails)
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+  }
+
+  const $ = (id) => document.getElementById(id);
+  const statusEl = $("status");
+  const setStatus = (s) => statusEl.textContent = s;
+  const clamp = (x,a,b) => Math.max(a, Math.min(b, x));
+
+  // 12 presets
+  const PRESETS = [
+    { id:"workboat_i4", name:"Workboat I4 (tight)",   cyl:4,  formA:120, formB:360, formQ:8.5, muffle:0.66, turboFreq:900,  turboHiss:0.24, thump:0.45 },
+    { id:"harbor_i6",   name:"Harbor I6 (smooth)",   cyl:6,  formA:95,  formB:280, formQ:7.0, muffle:0.72, turboFreq:750,  turboHiss:0.18, thump:0.38 },
+    { id:"trawler_i6",  name:"Trawler I6 (deep)",    cyl:6,  formA:140, formB:420, formQ:6.5, muffle:0.60, turboFreq:1100, turboHiss:0.26, thump:0.58 },
+    { id:"ferry_v8",    name:"Ferry V8 (big pulse)", cyl:8,  formA:110, formB:330, formQ:6.2, muffle:0.62, turboFreq:1050, turboHiss:0.24, thump:0.66 },
+    { id:"sport_v6",    name:"Sport V6 (brighter)",  cyl:6,  formA:170, formB:620, formQ:8.0, muffle:0.48, turboFreq:1500, turboHiss:0.32, thump:0.44 },
+    { id:"tug_v12",     name:"Tug V12 (heavy)",      cyl:12, formA:85,  formB:250, formQ:5.8, muffle:0.78, turboFreq:850,  turboHiss:0.16, thump:0.72 },
+    { id:"gen_set_i3",  name:"Gen-set I3 (chattery)",cyl:3,  formA:210, formB:720, formQ:10,  muffle:0.40, turboFreq:1700, turboHiss:0.40, thump:0.40 },
+    { id:"old_i6",      name:"Older I6 (lopey)",     cyl:6,  formA:125, formB:390, formQ:7.8, muffle:0.64, turboFreq:950,  turboHiss:0.22, thump:0.62 },
+    { id:"modern_i6",   name:"Modern I6 (clean)",    cyl:6,  formA:150, formB:480, formQ:9.2, muffle:0.56, turboFreq:1300, turboHiss:0.28, thump:0.45 },
+    { id:"cargo_v8",    name:"Cargo V8 (stacky)",    cyl:8,  formA:105, formB:290, formQ:5.6, muffle:0.70, turboFreq:820,  turboHiss:0.18, thump:0.68 },
+    { id:"fast_i4",     name:"Fast I4 (whiny)",      cyl:4,  formA:190, formB:700, formQ:9.5, muffle:0.44, turboFreq:1800, turboHiss:0.38, thump:0.42 },
+    { id:"patrol_v10",  name:"Patrol V10 (wide)",    cyl:10, formA:115, formB:360, formQ:6.8, muffle:0.60, turboFreq:1100, turboHiss:0.22, thump:0.70 },
+  ];
+
+  function safeSetText(id, txt){
+    const el = $(id);
+    if (el) el.textContent = txt;
+  }
+
+  function readParams(){
+    const preset = PRESETS.find(p => p.id === $("preset").value) || PRESETS[2];
+    return {
+      // identity
+      cyl: preset.cyl,
+
+      // mix
+      master: +$("master").value,
+      engine: +$("engine").value,
+      exhaust: +$("exhaust").value,
+      turbo: +$("turbo").value,
+      waves: +$("waves").value,
+      current: +$("current").value,
+
+      // core
+      rpm: +$("rpm").value,
+      load: +$("load").value,
+      rough: +$("rough").value,
+      thump: +$("thump").value,
+
+      // naturalness
+      rasp: +$("rasp").value,
+      clatter: +$("clatter").value,
+      drift: +$("drift").value,
+      space: +$("space").value,
+
+      // exhaust
+      muffle: +$("muffle").value,
+      formA: +$("formA").value,
+      formB: +$("formB").value,
+      formQ: +$("formQ").value,
+
+      // turbo
+      turboFreq: +$("turboFreq").value,
+      turboSpool: +$("turboSpool").value,
+      turboHiss: +$("turboHiss").value,
+
+      // water
+      chop: +$("chop").value,
+      bright: +$("bright").value
+    };
+  }
+
+  function updateLabels(){
+    const p = readParams();
+    const fmt2 = (v)=>Number(v).toFixed(2);
+    safeSetText("masterV", fmt2(p.master));
+    safeSetText("engineV", fmt2(p.engine));
+    safeSetText("exhaustV", fmt2(p.exhaust));
+    safeSetText("turboV", fmt2(p.turbo));
+    safeSetText("wavesV", fmt2(p.waves));
+    safeSetText("currentV", fmt2(p.current));
+
+    safeSetText("rpmV", String(Math.round(p.rpm)));
+    safeSetText("loadV", fmt2(p.load));
+    safeSetText("roughV", fmt2(p.rough));
+    safeSetText("thumpV", fmt2(p.thump));
+
+    safeSetText("raspV", fmt2(p.rasp));
+    safeSetText("clatterV", fmt2(p.clatter));
+    safeSetText("driftV", fmt2(p.drift));
+    safeSetText("spaceV", fmt2(p.space));
+
+    safeSetText("muffleV", fmt2(p.muffle));
+    safeSetText("formAV", String(Math.round(p.formA)));
+    safeSetText("formBV", String(Math.round(p.formB)));
+    safeSetText("formQV", Number(p.formQ).toFixed(1));
+
+    safeSetText("turboFreqV", String(Math.round(p.turboFreq)));
+    safeSetText("turboSpoolV", fmt2(p.turboSpool));
+    safeSetText("turboHissV", fmt2(p.turboHiss));
+
+    safeSetText("chopV", Number(p.chop).toFixed(2));
+    safeSetText("brightV", fmt2(p.bright));
+  }
+
+  function applyPresetToUI(p){
+    $("formA").value = p.formA;
+    $("formB").value = p.formB;
+    $("formQ").value = p.formQ;
+    $("muffle").value = p.muffle;
+    $("turboFreq").value = p.turboFreq;
+    $("turboHiss").value = p.turboHiss;
+    $("thump").value = p.thump;
+
+    updateLabels();
+    pushParams();
+  }
+
+  // AudioWorklet
+  let audioCtx = null;
+  let node = null;
+
+  function workletCode(){
+    return `
+      class OnePole {
+        constructor(){ this.y=0; this.a=0.01; }
+        setCutoff(hz, sr){
+          const a = 1 - Math.exp(-2*Math.PI*hz/sr);
+          this.a = Math.min(0.999999, Math.max(0.000001, a));
+        }
+        lp(x){ this.y += this.a*(x - this.y); return this.y; }
+      }
+      class BiquadBP {
+        constructor(){ this.b0=0;this.b1=0;this.b2=0;this.a1=0;this.a2=0;this.z1=0;this.z2=0; }
+        set(centerHz, Q, sr){
+          const hz = Math.max(10, Math.min(centerHz, 0.49*sr));
+          Q = Math.max(0.5, Math.min(Q, 40));
+          const w0 = 2*Math.PI*hz/sr;
+          const cosw0 = Math.cos(w0), sinw0 = Math.sin(w0);
+          const alpha = sinw0/(2*Q);
+          const a0 = 1 + alpha;
+          this.b0 = ( alpha)/a0;
+          this.b1 = 0.0;
+          this.b2 = (-alpha)/a0;
+          this.a1 = (-2*cosw0)/a0;
+          this.a2 = (1 - alpha)/a0;
+        }
+        process(x){
+          const y = this.b0*x + this.z1;
+          this.z1 = this.b1*x - this.a1*y + this.z2;
+          this.z2 = this.b2*x - this.a2*y;
+          return y;
+        }
+      }
+      class Pink {
+        constructor(){ this.b0=0;this.b1=0;this.b2=0;this.b3=0;this.b4=0;this.b5=0;this.b6=0; }
+        process(white){
+          this.b0 = 0.99886*this.b0 + white*0.0555179;
+          this.b1 = 0.99332*this.b1 + white*0.0750759;
+          this.b2 = 0.96900*this.b2 + white*0.1538520;
+          this.b3 = 0.86650*this.b3 + white*0.3104856;
+          this.b4 = 0.55000*this.b4 + white*0.5329522;
+          this.b5 = -0.7616*this.b5 - white*0.0168980;
+          const pink = this.b0 + this.b1 + this.b2 + this.b3 + this.b4 + this.b5 + this.b6 + white*0.5362;
+          this.b6 = white*0.115926;
+          return pink * 0.11;
+        }
+      }
+      class XorShift {
+        constructor(seed){ this.x=seed>>>0||0x12345678; }
+        next(){
+          let x=this.x;
+          x ^= x << 13; x >>>= 0;
+          x ^= x >> 17; x >>>= 0;
+          x ^= x << 5;  x >>>= 0;
+          this.x=x;
+          return x;
+        }
+        white(){ return ((this.next()/4294967295)*2)-1; }
+      }
+      function softclip(x){ return Math.tanh(x); }
+      function fract(x){ return x - Math.floor(x); }
+      function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
+      function expEnv(x){ return Math.exp(-6.0*x) * (1.0 - x); }
+
+      class BoatProc extends AudioWorkletProcessor {
+        constructor(){
+          super();
+          this.sr = sampleRate;
+          this.rng = new XorShift((Date.now() ^ 0x9E3779B9) >>> 0);
+          this.pink = new Pink();
+
+          // params
+          this.p = {
+            cyl: 6,
+            master: 0.70,
+            engine: 0.28,
+            exhaust: 0.55,
+            turbo: 0.18,
+            waves: 0.10,
+            current: 0.10,
+
+            rpm: 800,
+            load: 0.50,
+            rough: 0.35,
+            thump: 0.55,
+
+            rasp: 0.35,
+            clatter: 0.18,
+            drift: 0.25,
+            space: 0.10,
+
+            muffle: 0.62,
+            formA: 140,
+            formB: 420,
+            formQ: 7.0,
+
+            turboFreq: 1200,
+            turboSpool: 0.20,
+            turboHiss: 0.28,
+
+            chop: 0.07,
+            bright: 0.35
+          };
+
+          // phases
+          this.ph1=0; this.ph2=0; this.ph3=0;
+          this.phFire=0;
+          this.phSpool=0;
+          this.phTone=0;
+          this.phWave=0;
+          this.phClack=0;
+
+          // filters
+          this.engHP = new OnePole(); this.engHP.setCutoff(18, this.sr);
+          this.roughLP = new OnePole(); this.roughLP.setCutoff(2.2, this.sr);
+          this.mechLP = new OnePole(); this.mechLP.setCutoff(220, this.sr);
+
+          this.exhMuffleLP = new OnePole(); this.exhMuffleLP.setCutoff(700, this.sr);
+          this.driftLP = new OnePole(); this.driftLP.setCutoff(0.08, this.sr);
+          this.form1 = new BiquadBP(); this.form2 = new BiquadBP();
+          this.form1.set(this.p.formA, this.p.formQ, this.sr);
+          this.form2.set(this.p.formB, this.p.formQ, this.sr);
+
+          this.turboHP = new OnePole(); this.turboHP.setCutoff(140, this.sr);
+          this.turboBP = new BiquadBP(); this.turboBP.set(this.p.turboFreq, 7.0, this.sr);
+
+          this.waveLP = new OnePole(); this.waveLP.setCutoff(1200, this.sr);
+          this.waveHP = new OnePole(); this.waveHP.setCutoff(40, this.sr);
+          this.waveEnvLP = new OnePole(); this.waveEnvLP.setCutoff(0.25, this.sr);
+
+          this.currLP = new OnePole(); this.currLP.setCutoff(2200, this.sr);
+          this.currHP = new OnePole(); this.currHP.setCutoff(120, this.sr);
+
+          this.clackLP = new OnePole(); this.clackLP.setCutoff(2800, this.sr);
+
+          // short delay for "space"
+          this.delayLen = Math.floor(this.sr * 0.035); // 35 ms
+          this.delayBuf = new Float32Array(this.delayLen);
+          this.delayIdx = 0;
+
+          this.port.onmessage = (ev)=>{ if(ev.data?.type==="params") { Object.assign(this.p, ev.data.params); } };
+        }
+
+        process(_, outputs){
+          const out = outputs[0];
+          const L = out[0];
+          const R = out[1] || out[0];
+          const p = this.p;
+          const sr = this.sr;
+
+          // set/refresh formants per block using drift
+          const driftVal = this.driftLP.lp(this.rng.white());
+          const driftAmt = p.drift * 0.06; // ±6%
+          const fA = p.formA * (1.0 + driftAmt * driftVal);
+          const fB = p.formB * (1.0 - driftAmt * driftVal);
+          this.form1.set(fA, p.formQ, sr);
+          this.form2.set(fB, p.formQ, sr);
+
+          for(let i=0;i<L.length;i++){
+            // slow rpm wobble
+            const rough = this.roughLP.lp(this.rng.white());
+            const baseHz = p.rpm/60;
+            const hz = baseHz * (1 + p.rough * 0.015 * rough);
+
+            // engine harmonic bed (kept but reduced prominence)
+            this.ph1 = fract(this.ph1 + hz/sr);
+            this.ph2 = fract(this.ph2 + (2*hz)/sr);
+            this.ph3 = fract(this.ph3 + (3*hz)/sr);
+            let bed =
+              0.55*Math.sin(2*Math.PI*this.ph1) +
+              0.25*Math.sin(2*Math.PI*this.ph2) +
+              0.15*Math.sin(2*Math.PI*this.ph3);
+
+            // add low mechanical texture
+            const mech = this.mechLP.lp(this.rng.white());
+            bed += 0.12 * (0.15 + 0.85*p.load) * mech;
+
+            bed = bed - this.engHP.lp(bed);
+            const engine = softclip(bed*1.15);
+
+            // firing + micro-jitter
+            const fireHz = baseHz * (p.cyl/2);
+            const jit = (this.rng.white()) * 0.0006 * (0.2 + 0.8*p.load); // micro timing jitter
+            this.phFire = fract(this.phFire + (fireHz*(0.9+0.2*p.load))/sr + jit);
+
+            // pulse envelope
+            let pulse=0;
+            const w = 0.018 + 0.055*p.thump;
+            if (this.phFire < w){
+              const x = this.phFire / w;
+              pulse = expEnv(x);
+            }
+
+            // combustion intensity randomness (cycle-to-cycle)
+            const intensity = 0.85 + 0.30*(0.5*this.rng.white() + 0.5);
+
+            // turbulence (pink-ish) for realism
+            const white = this.rng.white();
+            const pink = this.pink.process(white);
+
+            // exhaust excitation: pulse + turbulence
+            let exhExcite =
+              (1.10 * pulse * intensity) +
+              (p.rasp) * (0.30 + 0.70*p.load) * pink;
+
+            // dual formant exhaust
+            let exh = 0.85*this.form1.process(exhExcite) + 0.65*this.form2.process(exhExcite);
+
+            // muffling (LP cutoff depends on muffle)
+            const muffHz = 260 + (1 - p.muffle)*2200;
+            this.exhMuffleLP.setCutoff(muffHz, sr);
+            exh = this.exhMuffleLP.lp(exh);
+
+            // saturation for physical body
+            exh = softclip(exh * (1.0 + 0.9*p.load));
+
+            // mechanical clatter: sparse irregular ticks
+            let clatter = 0;
+            const clackRate = (p.rpm/60) * 1.2;
+            this.phClack = fract(this.phClack + clackRate/sr);
+            if (this.phClack < 0.0025 && (this.rng.white() > 0.60)){
+              clatter = this.rng.white() * 0.9;
+            }
+            clatter = this.clackLP.lp(clatter);
+            clatter *= p.clatter * (0.20 + 0.80*p.load);
+
+            // turbo: less pure tone, more hiss, dynamic center
+            this.phSpool = fract(this.phSpool + (0.10 + 0.25*p.turboSpool*(0.5+p.load))/sr);
+            const spool = 0.5*(Math.sin(2*Math.PI*this.phSpool)+1);
+            const turboCenter = p.turboFreq * (0.85 + 0.35*spool + 0.25*p.load);
+
+            this.turboBP.set(turboCenter, 7.0, sr);
+            const hiss = this.turboBP.process(white) * (0.30 + 0.90*p.turboHiss);
+
+            this.phTone = fract(this.phTone + (turboCenter*(0.97 + 0.02*Math.sin(2*Math.PI*this.phSpool)))/sr);
+            const tone = Math.sin(2*Math.PI*this.phTone);
+
+            let turbo = 0.80*(0.82*hiss + 0.18*tone);
+            turbo = turbo - this.turboHP.lp(turbo);
+            turbo = softclip(turbo * (0.75 + 0.55*spool));
+
+            // waves
+            this.phWave = fract(this.phWave + p.chop/sr);
+            const waveLFO = 0.5*(Math.sin(2*Math.PI*this.phWave)+1);
+            const waveRand = 0.5*(this.rng.white()+1);
+            const waveEnv = this.waveEnvLP.lp(0.65*waveLFO + 0.35*waveRand);
+
+            let waveN = this.rng.white();
+            waveN = this.waveLP.lp(waveN);
+            waveN = waveN - this.waveHP.lp(waveN);
+            const waves = softclip(waveN * (0.65 + 0.95*waveEnv));
+
+            // current
+            const cutoff = 900 + p.bright*5200;
+            this.currLP.setCutoff(cutoff, sr);
+            let currN = this.rng.white();
+            const currBody = this.currLP.lp(currN);
+            const currHiss = currN - this.currHP.lp(currN);
+            let current = 0.75*currBody + (0.25 + 0.45*p.bright)*currHiss;
+            current = softclip(current * 0.8);
+
+            // mix
+            let mix =
+              p.engine*engine +
+              p.exhaust*exh +
+              (0.20*clatter) +
+              p.turbo*turbo +
+              p.waves*waves +
+              p.current*current;
+
+            // tiny "space" (early reflections)
+            const space = clamp(p.space, 0, 1);
+            if (space > 0.001){
+              const d = this.delayBuf[this.delayIdx];
+              this.delayBuf[this.delayIdx] = mix + d * 0.18;
+              this.delayIdx++; if (this.delayIdx >= this.delayLen) this.delayIdx = 0;
+              mix = mix*(1.0 - space) + d*space;
+            }
+
+            // master and mild limiter
+            mix = softclip(mix * 1.25) * p.master;
+
+            L[i] = mix;
+            if (out.length > 1) R[i] = mix;
+          }
+          return true;
+        }
+      }
+
+      registerProcessor("boat", BoatProc);
+    `;
+  }
+
+  async function ensureAudio(){
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint:"playback" });
+    if (!audioCtx.audioWorklet) throw new Error("AudioWorklet not available. Open the GitHub Pages URL in Safari (HTTPS).");
+
+    const blob = new Blob([workletCode()], {type:"application/javascript"});
+    const url = URL.createObjectURL(blob);
+
+    setStatus("Loading worklet...");
+    await audioCtx.audioWorklet.addModule(url);
+    URL.revokeObjectURL(url);
+
+    node = new AudioWorkletNode(audioCtx, "boat", { numberOfOutputs:1, outputChannelCount:[2] });
+    node.connect(audioCtx.destination);
+
+    setStatus("Worklet ready.");
+    pushParams();
+  }
+
+  function pushParams(){
+    if (!node) return;
+    node.port.postMessage({ type:"params", params: readParams() });
+  }
+
+  // Buttons
+  $("btnStart").addEventListener("click", async () => {
+    try {
+      await ensureAudio();
+      setStatus("AudioContext: " + audioCtx.state);
+      await audioCtx.resume();
+      setStatus("Running. AudioContext: " + audioCtx.state);
+      $("btnStart").disabled = true;
+      $("btnStop").disabled = false;
+    } catch (e) {
+      alert(e?.message || String(e));
+      setStatus("Start failed.");
+    }
+  });
+
+  $("btnStop").addEventListener("click", async () => {
+    if (audioCtx) await audioCtx.suspend();
+    $("btnStart").disabled = false;
+    $("btnStop").disabled = true;
+    setStatus("Stopped. AudioContext: " + (audioCtx ? audioCtx.state : "n/a"));
+  });
+
+  $("btnTest").addEventListener("click", async () => {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      await audioCtx.resume();
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      g.gain.value = 0.06;
+      o.frequency.value = 220;
+      o.connect(g).connect(audioCtx.destination);
+      o.start();
+      setTimeout(()=>{ o.stop(); o.disconnect(); g.disconnect(); }, 700);
+      setStatus("Test tone played. AudioContext: " + audioCtx.state);
+    } catch (e) {
+      alert(e?.message || String(e));
+      setStatus("Test tone failed.");
+    }
+  });
+
+  $("btnReset").addEventListener("click", async () => {
+    try {
+      setStatus("Resetting cache...");
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (const r of regs) await r.unregister();
+      }
+      if (window.caches) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      setStatus("Reset done. Reloading...");
+      location.reload();
+    } catch {
+      setStatus("Reset failed.");
+    }
+  });
+
+  // Sliders
+  const sliderIds = [
+    "master","engine","exhaust","turbo","waves","current",
+    "rpm","load","rough","thump",
+    "rasp","clatter","drift","space",
+    "muffle","formA","formB","formQ",
+    "turboFreq","turboSpool","turboHiss",
+    "chop","bright"
+  ];
+  sliderIds.forEach(id => $(id).addEventListener("input", () => { updateLabels(); pushParams(); }));
+
+  // Presets dropdown
+  function initPresets(){
+    const sel = $("preset");
+    PRESETS.forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p.id; opt.textContent = p.name;
+      sel.appendChild(opt);
+    });
+    sel.value = "trawler_i6";
+    applyPresetToUI(PRESETS.find(p=>p.id==="trawler_i6"));
+  }
+
+  $("preset").addEventListener("change", () => {
+    const p = PRESETS.find(x => x.id === $("preset").value);
+    if (p) applyPresetToUI(p);
+  });
+
+  initPresets();
+  updateLabels();
+  setStatus("Ready. Tap Test Tone, then Start.");
+</script>
+</body>
+</html>
