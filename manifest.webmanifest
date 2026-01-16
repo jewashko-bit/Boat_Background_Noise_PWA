@@ -1,0 +1,18 @@
+{
+  "name": "Diesel Boat Sleep Noise",
+  "short_name": "BoatNoise",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0c10",
+  "theme_color": "#0b0c10",
+  "description": "Procedural diesel boat ambience with engine models, exhaust note, turbo, waves, and current. Streaming AudioWorklet + WAV export.",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20192%20192'%3E%3Crect%20width='192'%20height='192'%20rx='40'%20fill='%230b0c10'/%3E%3Cpath%20d='M38%20118%20c30%2015%2086%2015%20116%200%20c-8%2022-28%2036-58%2036%20c-30%200-50-14-58-36Z'%20fill='%23ffffff'/%3E%3Cpath%20d='M64%2096%20h64%20l10%2018%20H54%20z'%20fill='%23ffffff'/%3E%3Ccircle%20cx='78'%20cy='130'%20r='8'%20fill='%230b0c10'/%3E%3Ccircle%20cx='114'%20cy='130'%20r='8'%20fill='%230b0c10'/%3E%3Cpath%20d='M120%2076%20c6-10%2016-10%2022%200%20c-10%206-12%2014%200%2020%20c-6%2010-16%2010-22%200%20c10-6%2012-14%200-20Z'%20fill='%23ffffff'/%3E%3C/svg%3E",
+      "type": "image/svg+xml",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    }
+  ]
+}
