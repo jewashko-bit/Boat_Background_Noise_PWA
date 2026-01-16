@@ -1,0 +1,846 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0c10" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <title>Diesel Boat Noise — Realistic Procedural</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#0b0c10; }
+    body { margin: 16px; max-width: 1040px; }
+    h1 { margin:0 0 6px; font-size: 20px; }
+    .sub { color:#444; font-size: 12.5px; line-height:1.35; margin-bottom: 12px; }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin: 10px 0 14px; }
+    button { padding:10px 12px; border-radius:12px; border:1px solid #bbb; background:#f7f7f7; font-weight:650; }
+    button.primary { background:#0b0c10; color:#fff; border-color:#0b0c10; }
+    button:disabled { opacity: 0.55; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .card { border:1px solid #ddd; border-radius:12px; padding:12px; background:#fff; }
+    .row { display:grid; grid-template-columns: 190px 1fr 90px; gap:10px; align-items:center; margin: 10px 0; }
+    label { font-size: 13px; }
+    input[type="range"] { width: 100%; }
+    select { width:100%; padding:7px 8px; border:1px solid #ccc; border-radius:10px; font-size: 13px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: 12px; }
+    .status { font-size: 13px; }
+    .warn { color:#8a2a2a; font-size: 12.5px; line-height: 1.35; margin-top: 8px; }
+    .hint { color:#444; font-size: 12px; line-height: 1.35; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <h1>Diesel Boat Noise — Realistic Procedural (A–E)</h1>
+  <div class="sub">
+    Implements event-driven firing order + crank ripple, multi-band exhaust, turbo hiss/tone/flutter,
+    multi-tap early reflections + hull resonance, and slow nonstationary drift for realism.
+    If there’s no sound: press <b>Test Tone</b>. If UI seems stuck: press <b>Reset Cache</b>.
+  </div>
+
+  <div class="actions">
+    <button id="btnStart" class="primary">Start</button>
+    <button id="btnStop" disabled>Stop</button>
+    <button id="btnTest">Test Tone</button>
+    <button id="btnReset">Reset Cache</button>
+    <span id="status" class="status">Ready.</span>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h3 style="margin:0 0 10px;">Engine Selection</h3>
+      <div class="row">
+        <label>Preset engine</label>
+        <select id="preset"></select>
+        <span></span>
+      </div>
+
+      <h3 style="margin:14px 0 10px;">Master + Mix</h3>
+      <div class="row"><label>Master</label><input id="master" type="range" min="0" max="1" step="0.01" value="0.68"><span id="masterV" class="mono"></span></div>
+      <div class="row"><label>Engine Bed</label><input id="engine" type="range" min="0" max="1" step="0.01" value="0.22"><span id="engineV" class="mono"></span></div>
+      <div class="row"><label>Exhaust Low (Chuff)</label><input id="exLow" type="range" min="0" max="1" step="0.01" value="0.30"><span id="exLowV" class="mono"></span></div>
+      <div class="row"><label>Exhaust Mid (Bark)</label><input id="exMid" type="range" min="0" max="1" step="0.01" value="0.55"><span id="exMidV" class="mono"></span></div>
+      <div class="row"><label>Exhaust High (Rasp)</label><input id="exHigh" type="range" min="0" max="1" step="0.01" value="0.22"><span id="exHighV" class="mono"></span></div>
+      <div class="row"><label>Turbo</label><input id="turbo" type="range" min="0" max="1" step="0.01" value="0.16"><span id="turboV" class="mono"></span></div>
+      <div class="row"><label>Waves</label><input id="waves" type="range" min="0" max="1" step="0.01" value="0.12"><span id="wavesV" class="mono"></span></div>
+      <div class="row"><label>Current</label><input id="current" type="range" min="0" max="1" step="0.01" value="0.12"><span id="currentV" class="mono"></span></div>
+
+      <h3 style="margin:14px 0 10px;">Distance</h3>
+      <div class="row"><label>Distance (near→far)</label><input id="distance" type="range" min="0" max="1" step="0.01" value="0.55"><span id="distanceV" class="mono"></span></div>
+      <div class="hint">
+        Higher distance reduces highs/clatter and increases early reflections (feels more “in the cabin”).
+      </div>
+
+      <div class="warn">
+        iOS: open your GitHub Pages URL in Safari (not inside the GitHub app). Silent mode off. Tap Start once.
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 10px;">Core Engine Dynamics (A + E)</h3>
+      <div class="row"><label>RPM</label><input id="rpm" type="range" min="300" max="2200" step="10" value="820"><span id="rpmV" class="mono"></span></div>
+      <div class="row"><label>Load</label><input id="load" type="range" min="0" max="1" step="0.01" value="0.50"><span id="loadV" class="mono"></span></div>
+      <div class="row"><label>Crank Ripple</label><input id="ripple" type="range" min="0" max="1" step="0.01" value="0.35"><span id="rippleV" class="mono"></span></div>
+      <div class="row"><label>Cycle Jitter</label><input id="jitter" type="range" min="0" max="1" step="0.01" value="0.30"><span id="jitterV" class="mono"></span></div>
+      <div class="row"><label>Nonstationary Drift</label><input id="wander" type="range" min="0" max="1" step="0.01" value="0.25"><span id="wanderV" class="mono"></span></div>
+
+      <h3 style="margin:14px 0 10px;">Exhaust Tone (B)</h3>
+      <div class="row"><label>Muffling</label><input id="muffle" type="range" min="0" max="1" step="0.01" value="0.64"><span id="muffleV" class="mono"></span></div>
+      <div class="row"><label>Formant A (Hz)</label><input id="formA" type="range" min="60" max="650" step="5" value="140"><span id="formAV" class="mono"></span></div>
+      <div class="row"><label>Formant B (Hz)</label><input id="formB" type="range" min="150" max="1400" step="10" value="420"><span id="formBV" class="mono"></span></div>
+      <div class="row"><label>Formant Q</label><input id="formQ" type="range" min="0.5" max="18" step="0.1" value="7.0"><span id="formQV" class="mono"></span></div>
+      <div class="row"><label>Rasp (turbulence)</label><input id="rasp" type="range" min="0" max="1" step="0.01" value="0.38"><span id="raspV" class="mono"></span></div>
+      <div class="row"><label>Clatter</label><input id="clatter" type="range" min="0" max="1" step="0.01" value="0.18"><span id="clatterV" class="mono"></span></div>
+
+      <h3 style="margin:14px 0 10px;">Turbo (C)</h3>
+      <div class="row"><label>Turbo Base Freq</label><input id="turboFreq" type="range" min="200" max="4200" step="10" value="1200"><span id="turboFreqV" class="mono"></span></div>
+      <div class="row"><label>Turbo Hiss</label><input id="turboHiss" type="range" min="0" max="1" step="0.01" value="0.30"><span id="turboHissV" class="mono"></span></div>
+      <div class="row"><label>Flutter</label><input id="flutter" type="range" min="0" max="1" step="0.01" value="0.18"><span id="flutterV" class="mono"></span></div>
+
+      <h3 style="margin:14px 0 10px;">Space + Hull (D)</h3>
+      <div class="row"><label>Early Reflections</label><input id="space" type="range" min="0" max="1" step="0.01" value="0.14"><span id="spaceV" class="mono"></span></div>
+      <div class="row"><label>Hull Resonance (Hz)</label><input id="hullHz" type="range" min="45" max="160" step="1" value="84"><span id="hullHzV" class="mono"></span></div>
+      <div class="row"><label>Hull Amount</label><input id="hullAmt" type="range" min="0" max="1" step="0.01" value="0.22"><span id="hullAmtV" class="mono"></span></div>
+
+      <h3 style="margin:14px 0 10px;">Water (E)</h3>
+      <div class="row"><label>Wave Chop Rate</label><input id="chop" type="range" min="0.01" max="0.35" step="0.01" value="0.07"><span id="chopV" class="mono"></span></div>
+      <div class="row"><label>Water Wander</label><input id="waterWander" type="range" min="0" max="1" step="0.01" value="0.22"><span id="waterWanderV" class="mono"></span></div>
+      <div class="row"><label>Current Brightness</label><input id="bright" type="range" min="0" max="1" step="0.01" value="0.35"><span id="brightV" class="mono"></span></div>
+    </div>
+  </div>
+
+<script>
+  // SW registration (safe if fails)
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+  }
+
+  const $ = (id) => document.getElementById(id);
+  const statusEl = $("status");
+  const setStatus = (s) => statusEl.textContent = s;
+
+  // 12 engine presets with cylinder count + firing orders (720° cycle indices)
+  // Firing order expressed as crank angles in degrees over a 720-degree 4-stroke cycle.
+  // These are plausible patterns designed for realism (not brand-specific).
+  const PRESETS = [
+    { id:"workboat_i4", name:"Workboat I4 (tight)",   cyl:4,  orderDeg:[0, 180, 360, 540], formA:120, formB:360, formQ:8.5, muffle:0.68, turboFreq:900,  hullHz:92,  rasp:0.34 },
+    { id:"harbor_i6",   name:"Harbor I6 (smooth)",   cyl:6,  orderDeg:[0, 120, 240, 360, 480, 600], formA:95,  formB:280, formQ:7.0, muffle:0.74, turboFreq:750,  hullHz:78,  rasp:0.26 },
+    { id:"trawler_i6",  name:"Trawler I6 (deep)",    cyl:6,  orderDeg:[0, 120, 240, 360, 480, 600], formA:140, formB:420, formQ:6.5, muffle:0.62, turboFreq:1100, hullHz:84,  rasp:0.36 },
+    { id:"ferry_v8",    name:"Ferry V8 (big pulse)", cyl:8,  orderDeg:[0, 90, 180, 270, 360, 450, 540, 630],  formA:110, formB:330, formQ:6.2, muffle:0.64, turboFreq:1050, hullHz:72,  rasp:0.30 },
+    { id:"sport_v6",    name:"Sport V6 (brighter)",  cyl:6,  orderDeg:[0, 120, 240, 360, 480, 600], formA:170, formB:620, formQ:8.0, muffle:0.50, turboFreq:1500, hullHz:88,  rasp:0.42 },
+    { id:"tug_v12",     name:"Tug V12 (heavy)",      cyl:12, orderDeg:[0, 60, 120, 180, 240, 300, 360, 420, 480, 540, 600, 660], formA:85,  formB:250, formQ:5.8, muffle:0.80, turboFreq:850, hullHz:62,  rasp:0.22 },
+    { id:"gen_set_i3",  name:"Gen-set I3 (chattery)",cyl:3,  orderDeg:[0, 240, 480],        formA:210, formB:720, formQ:10.0,muffle:0.42, turboFreq:1700, hullHz:110, rasp:0.55 },
+    { id:"old_i6",      name:"Older I6 (lopey)",     cyl:6,  orderDeg:[0, 120, 240, 360, 480, 600], formA:125, formB:390, formQ:7.8, muffle:0.66, turboFreq:950, hullHz:82,  rasp:0.40 },
+    { id:"modern_i6",   name:"Modern I6 (clean)",    cyl:6,  orderDeg:[0, 120, 240, 360, 480, 600], formA:150, formB:480, formQ:9.2, muffle:0.58, turboFreq:1300, hullHz:90,  rasp:0.30 },
+    { id:"cargo_v8",    name:"Cargo V8 (stacky)",    cyl:8,  orderDeg:[0, 90, 180, 270, 360, 450, 540, 630],  formA:105, formB:290, formQ:5.6, muffle:0.72, turboFreq:820, hullHz:68,  rasp:0.24 },
+    { id:"fast_i4",     name:"Fast I4 (whiny)",      cyl:4,  orderDeg:[0, 180, 360, 540],   formA:190, formB:700, formQ:9.5, muffle:0.46, turboFreq:1800, hullHz:104, rasp:0.36 },
+    { id:"patrol_v10",  name:"Patrol V10 (wide)",    cyl:10, orderDeg:[0, 72, 144, 216, 288, 360, 432, 504, 576, 648], formA:115, formB:360, formQ:6.8, muffle:0.62, turboFreq:1100, hullHz:76, rasp:0.28 },
+  ];
+
+  function safeSetText(id, txt){ const el = $(id); if (el) el.textContent = txt; }
+  function fmt2(v){ return Number(v).toFixed(2); }
+
+  function readParams(){
+    const preset = PRESETS.find(p => p.id === $("preset").value) || PRESETS[2];
+    return {
+      // identity
+      cyl: preset.cyl,
+      orderDeg: preset.orderDeg,
+
+      // master/mix
+      master: +$("master").value,
+      engine: +$("engine").value,
+      exLow: +$("exLow").value,
+      exMid: +$("exMid").value,
+      exHigh: +$("exHigh").value,
+      turbo: +$("turbo").value,
+      waves: +$("waves").value,
+      current: +$("current").value,
+      distance: +$("distance").value,
+
+      // core (A/E)
+      rpm: +$("rpm").value,
+      load: +$("load").value,
+      ripple: +$("ripple").value,
+      jitter: +$("jitter").value,
+      wander: +$("wander").value,
+
+      // exhaust (B)
+      muffle: +$("muffle").value,
+      formA: +$("formA").value,
+      formB: +$("formB").value,
+      formQ: +$("formQ").value,
+      rasp: +$("rasp").value,
+      clatter: +$("clatter").value,
+
+      // turbo (C)
+      turboFreq: +$("turboFreq").value,
+      turboHiss: +$("turboHiss").value,
+      flutter: +$("flutter").value,
+
+      // space/hull (D)
+      space: +$("space").value,
+      hullHz: +$("hullHz").value,
+      hullAmt: +$("hullAmt").value,
+
+      // water (E)
+      chop: +$("chop").value,
+      waterWander: +$("waterWander").value,
+      bright: +$("bright").value,
+    };
+  }
+
+  function updateLabels(){
+    const p = readParams();
+    safeSetText("masterV", fmt2(p.master));
+    safeSetText("engineV", fmt2(p.engine));
+    safeSetText("exLowV", fmt2(p.exLow));
+    safeSetText("exMidV", fmt2(p.exMid));
+    safeSetText("exHighV", fmt2(p.exHigh));
+    safeSetText("turboV", fmt2(p.turbo));
+    safeSetText("wavesV", fmt2(p.waves));
+    safeSetText("currentV", fmt2(p.current));
+    safeSetText("distanceV", fmt2(p.distance));
+
+    safeSetText("rpmV", String(Math.round(p.rpm)));
+    safeSetText("loadV", fmt2(p.load));
+    safeSetText("rippleV", fmt2(p.ripple));
+    safeSetText("jitterV", fmt2(p.jitter));
+    safeSetText("wanderV", fmt2(p.wander));
+
+    safeSetText("muffleV", fmt2(p.muffle));
+    safeSetText("formAV", String(Math.round(p.formA)));
+    safeSetText("formBV", String(Math.round(p.formB)));
+    safeSetText("formQV", Number(p.formQ).toFixed(1));
+    safeSetText("raspV", fmt2(p.rasp));
+    safeSetText("clatterV", fmt2(p.clatter));
+
+    safeSetText("turboFreqV", String(Math.round(p.turboFreq)));
+    safeSetText("turboHissV", fmt2(p.turboHiss));
+    safeSetText("flutterV", fmt2(p.flutter));
+
+    safeSetText("spaceV", fmt2(p.space));
+    safeSetText("hullHzV", String(Math.round(p.hullHz)));
+    safeSetText("hullAmtV", fmt2(p.hullAmt));
+
+    safeSetText("chopV", Number(p.chop).toFixed(2));
+    safeSetText("waterWanderV", fmt2(p.waterWander));
+    safeSetText("brightV", fmt2(p.bright));
+  }
+
+  function applyPresetToUI(p){
+    $("formA").value = p.formA;
+    $("formB").value = p.formB;
+    $("formQ").value = p.formQ;
+    $("muffle").value = p.muffle;
+    $("turboFreq").value = p.turboFreq;
+    $("hullHz").value = p.hullHz;
+    $("rasp").value = p.rasp;
+    updateLabels();
+    pushParams();
+  }
+
+  // AudioWorklet (Streaming)
+  let audioCtx = null;
+  let node = null;
+
+  function workletCode(){
+    return `
+      // ===== DSP helpers =====
+      function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
+      function softclip(x){ return Math.tanh(x); }
+
+      class OnePole {
+        constructor(){ this.y=0; this.a=0.01; }
+        setCutoff(hz, sr){
+          const a = 1 - Math.exp(-2*Math.PI*hz/sr);
+          this.a = Math.min(0.999999, Math.max(0.000001, a));
+        }
+        lp(x){ this.y += this.a*(x - this.y); return this.y; }
+      }
+
+      class BiquadBP {
+        constructor(){ this.b0=0;this.b1=0;this.b2=0;this.a1=0;this.a2=0;this.z1=0;this.z2=0; }
+        set(centerHz, Q, sr){
+          const hz = Math.max(10, Math.min(centerHz, 0.49*sr));
+          Q = Math.max(0.5, Math.min(Q, 40));
+          const w0 = 2*Math.PI*hz/sr;
+          const cosw0 = Math.cos(w0), sinw0 = Math.sin(w0);
+          const alpha = sinw0/(2*Q);
+          const a0 = 1 + alpha;
+          this.b0 = ( alpha)/a0;
+          this.b1 = 0.0;
+          this.b2 = (-alpha)/a0;
+          this.a1 = (-2*cosw0)/a0;
+          this.a2 = (1 - alpha)/a0;
+        }
+        process(x){
+          const y = this.b0*x + this.z1;
+          this.z1 = this.b1*x - this.a1*y + this.z2;
+          this.z2 = this.b2*x - this.a2*y;
+          return y;
+        }
+      }
+
+      // Cheap pink noise (Kellet)
+      class Pink {
+        constructor(){ this.b0=0;this.b1=0;this.b2=0;this.b3=0;this.b4=0;this.b5=0;this.b6=0; }
+        process(white){
+          this.b0 = 0.99886*this.b0 + white*0.0555179;
+          this.b1 = 0.99332*this.b1 + white*0.0750759;
+          this.b2 = 0.96900*this.b2 + white*0.1538520;
+          this.b3 = 0.86650*this.b3 + white*0.3104856;
+          this.b4 = 0.55000*this.b4 + white*0.5329522;
+          this.b5 = -0.7616*this.b5 - white*0.0168980;
+          const pink = this.b0 + this.b1 + this.b2 + this.b3 + this.b4 + this.b5 + this.b6 + white*0.5362;
+          this.b6 = white*0.115926;
+          return pink * 0.11;
+        }
+      }
+
+      class XorShift {
+        constructor(seed){ this.x=seed>>>0||0x12345678; }
+        next(){
+          let x=this.x;
+          x ^= x << 13; x >>>= 0;
+          x ^= x >> 17; x >>>= 0;
+          x ^= x << 5;  x >>>= 0;
+          this.x=x;
+          return x;
+        }
+        white(){ return ((this.next()/4294967295)*2)-1; }
+      }
+
+      // Exponential-ish envelope (fast attack, decays)
+      function envShape(x){
+        // x in [0..1]
+        return Math.exp(-6.0*x) * (1.0 - x);
+      }
+
+      // Fixed voice pool: avoids allocations in audio loop
+      class VoicePool {
+        constructor(maxVoices){
+          this.n = maxVoices;
+          this.a = new Float32Array(maxVoices);   // amplitude
+          this.p = new Float32Array(maxVoices);   // phase [0..1]
+          this.d = new Float32Array(maxVoices);   // decay speed
+          this.t = new Int8Array(maxVoices);      // type (0=low,1=mid,2=high)
+          for (let i=0;i<maxVoices;i++){ this.a[i]=0; this.p[i]=1; this.d[i]=0.01; this.t[i]=0; }
+        }
+        trigger(type, amp, decay){
+          // find quietest slot
+          let k=0, best=1e9;
+          for (let i=0;i<this.n;i++){
+            const s = this.a[i]*(1.0 - this.p[i]);
+            if (s < best){ best=s; k=i; }
+          }
+          this.t[k]=type;
+          this.a[k]=amp;
+          this.p[k]=0;
+          this.d[k]=decay;
+        }
+        // returns summed excitation per band
+        step(){
+          let lo=0, mid=0, hi=0;
+          for (let i=0;i<this.n;i++){
+            const ph = this.p[i];
+            if (ph >= 1){ continue; }
+            const e = this.a[i]*envShape(ph);
+            const type = this.t[i];
+            if (type===0) lo += e;
+            else if (type===1) mid += e;
+            else hi += e;
+            this.p[i] = ph + this.d[i];
+          }
+          return [lo, mid, hi];
+        }
+      }
+
+      // Multi-tap early reflections (short delays)
+      class MultiTapDelay {
+        constructor(sr){
+          this.sr=sr;
+          this.maxLen = Math.floor(sr * 0.08); // 80 ms
+          this.buf = new Float32Array(this.maxLen);
+          this.idx=0;
+          this.lp = new OnePole(); this.lp.setCutoff(2200, sr); // damping
+        }
+        process(x, amt, d1s, d2s, d3s){
+          const d1 = Math.max(1, Math.floor(this.sr * d1s));
+          const d2 = Math.max(1, Math.floor(this.sr * d2s));
+          const d3 = Math.max(1, Math.floor(this.sr * d3s));
+          const i1 = (this.idx - d1 + this.maxLen) % this.maxLen;
+          const i2 = (this.idx - d2 + this.maxLen) % this.maxLen;
+          const i3 = (this.idx - d3 + this.maxLen) % this.maxLen;
+          const t = 0.55*this.buf[i1] + 0.33*this.buf[i2] + 0.22*this.buf[i3];
+          const td = this.lp.lp(t);
+          // feedback small for realism without reverb wash
+          this.buf[this.idx] = x + td * 0.18;
+          this.idx++; if (this.idx>=this.maxLen) this.idx=0;
+          return x*(1-amt) + td*amt;
+        }
+      }
+
+      class BoatProc extends AudioWorkletProcessor {
+        constructor(){
+          super();
+          this.sr = sampleRate;
+          this.rng = new XorShift((Date.now() ^ 0x9E3779B9) >>> 0);
+          this.pink = new Pink();
+
+          // params (will be overwritten from UI)
+          this.p = {
+            cyl:6,
+            orderDeg:[0,120,240,360,480,600],
+
+            master:0.68, engine:0.22, exLow:0.30, exMid:0.55, exHigh:0.22,
+            turbo:0.16, waves:0.12, current:0.12, distance:0.55,
+
+            rpm:820, load:0.50, ripple:0.35, jitter:0.30, wander:0.25,
+
+            muffle:0.64, formA:140, formB:420, formQ:7.0, rasp:0.38, clatter:0.18,
+
+            turboFreq:1200, turboHiss:0.30, flutter:0.18,
+
+            space:0.14, hullHz:84, hullAmt:0.22,
+
+            chop:0.07, waterWander:0.22, bright:0.35
+          };
+
+          // Convert firing order to radians in 0..4pi (720 degrees)
+          this.orderRad = new Float32Array(16);
+          this.orderN = 0;
+          this.setOrderFromDeg(this.p.orderDeg);
+
+          // Crank angle in 0..4pi
+          this.theta = 0;
+
+          // Track next firing event index (sorted order)
+          this.fireIdx = 0;
+
+          // Voice pool: separate excitation envelopes for low/mid/high bands
+          this.voices = new VoicePool(32);
+
+          // Drift/random walk state (E)
+          this.rpmDrift = 0;
+          this.loadDrift = 0;
+          this.waterDrift = 0;
+          this.driftLP = new OnePole(); this.driftLP.setCutoff(0.06, this.sr);
+          this.waterLP = new OnePole(); this.waterLP.setCutoff(0.04, this.sr);
+
+          // Engine bed
+          this.ph1=0; this.ph2=0; this.ph3=0;
+          this.engHP = new OnePole(); this.engHP.setCutoff(18, this.sr);
+          this.mechLP = new OnePole(); this.mechLP.setCutoff(220, this.sr);
+
+          // Exhaust filters (B) + slow formant drift
+          this.form1 = new BiquadBP(); this.form2 = new BiquadBP();
+          this.formDriftLP = new OnePole(); this.formDriftLP.setCutoff(0.08, this.sr);
+          this.exhMuffleLP = new OnePole(); this.exhMuffleLP.setCutoff(700, this.sr);
+          this.lowLP = new OnePole(); this.lowLP.setCutoff(180, this.sr);
+          this.highHP = new OnePole(); this.highHP.setCutoff(700, this.sr); // used as subtractive HP
+          this.form1.set(this.p.formA, this.p.formQ, this.sr);
+          this.form2.set(this.p.formB, this.p.formQ, this.sr);
+
+          // Hull resonance (D)
+          this.hullBP = new BiquadBP(); this.hullBP.set(this.p.hullHz, 4.5, this.sr);
+
+          // Clatter (irregular transients)
+          this.phClack=0;
+          this.clackLP = new OnePole(); this.clackLP.setCutoff(2800, this.sr);
+
+          // Turbo (C)
+          this.turboBP = new BiquadBP(); this.turboBP.set(this.p.turboFreq, 7.0, this.sr);
+          this.turboHP = new OnePole(); this.turboHP.setCutoff(140, this.sr);
+          this.turboTonePh = 0;
+          this.flutterEnv = 0;
+          this.flutterLP = new OnePole(); this.flutterLP.setCutoff(8.0, this.sr);
+          this.prevLoad = this.p.load;
+
+          // Water (E)
+          this.phWave=0;
+          this.waveLP = new OnePole(); this.waveLP.setCutoff(1200, this.sr);
+          this.waveHP = new OnePole(); this.waveHP.setCutoff(40, this.sr);
+          this.waveEnvLP = new OnePole(); this.waveEnvLP.setCutoff(0.25, this.sr);
+
+          this.currLP = new OnePole(); this.currLP.setCutoff(2200, this.sr);
+          this.currHP = new OnePole(); this.currHP.setCutoff(120, this.sr);
+
+          // Space: multi-tap early reflections
+          this.spaceDelay = new MultiTapDelay(this.sr);
+
+          this.port.onmessage = (ev) => {
+            const m = ev.data || {};
+            if (m.type === "params" && m.params) {
+              const p = m.params;
+              // order arrives as degrees array; store for next conversion
+              if (p.orderDeg && Array.isArray(p.orderDeg)) {
+                this.setOrderFromDeg(p.orderDeg);
+              }
+              Object.assign(this.p, p);
+            }
+          };
+        }
+
+        setOrderFromDeg(orderDeg){
+          // sort the order for reliable scheduling (0..720)
+          const arr = orderDeg.slice().map(x => ((+x % 720) + 720) % 720).sort((a,b)=>a-b);
+          this.orderN = Math.min(arr.length, 16);
+          for (let i=0;i<this.orderN;i++){
+            const deg = arr[i];
+            this.orderRad[i] = (deg/720) * (4*Math.PI);
+          }
+          this.fireIdx = 0;
+          this.theta = 0;
+        }
+
+        process(_, outputs){
+          const out = outputs[0];
+          const L = out[0];
+          const R = out[1] || out[0];
+          const p = this.p;
+          const sr = this.sr;
+
+          // Nonstationary drift (E): random-walk, slowly filtered
+          const driftNoise = this.driftLP.lp(this.rng.white());
+          const wNoise = this.waterLP.lp(this.rng.white());
+          const wander = p.wander;
+
+          // drift amplitudes kept small so it feels real, not seasick
+          this.rpmDrift = driftNoise * (wander * 0.015);    // +/- ~1.5%
+          this.loadDrift = driftNoise * (wander * 0.06);    // +/- ~0.06
+          this.waterDrift = wNoise * (p.waterWander * 0.35);
+
+          // Distance shaping: farther = less highs/clatter, slightly more space
+          const dist = clamp(p.distance, 0, 1);
+          const near = 1.0 - dist;
+          const far = dist;
+          const highDamp = 0.45 + 0.55*far; // increases muffling feel
+          const spaceAmt = clamp(p.space * (0.65 + 0.75*far), 0, 0.65);
+
+          // Formant drift (B)
+          const fd = this.formDriftLP.lp(this.rng.white());
+          const driftAmt = (0.04 + 0.06*far); // ±4–10%
+          const fA = p.formA * (1 + driftAmt*fd);
+          const fB = p.formB * (1 - driftAmt*fd);
+          this.form1.set(fA, p.formQ, sr);
+          this.form2.set(fB, p.formQ, sr);
+
+          // Hull resonance update
+          this.hullBP.set(p.hullHz, 4.5, sr);
+
+          for (let i=0; i<L.length; i++){
+            // Apply drift to rpm and load (E)
+            const rpm = clamp(p.rpm * (1.0 + this.rpmDrift), 250, 2600);
+            let load = clamp(p.load + this.loadDrift, 0, 1);
+
+            // A) crank ripple: speed ripple tied to firing cadence
+            // Use a small sinusoid at half firing rate plus noise jitter
+            const baseOmega = (rpm/60) * (2*Math.PI); // rad/sec
+            const firePerSec = (rpm/60) * (p.cyl/2);
+            const rippleSin = Math.sin(this.theta * (p.cyl/2)); // correlated with cylinder events
+            const ripple = p.ripple * (0.0015 + 0.0045*load) * rippleSin;
+            const jit = (p.jitter * 0.0008) * (0.3 + 0.7*load) * this.rng.white();
+
+            // Advance crank angle over 4pi (720 degrees 4-stroke cycle)
+            const omega = baseOmega * (1.0 + ripple) + (jit * 2*Math.PI);
+            const dTheta = omega / sr;
+            let prevTheta = this.theta;
+            this.theta += dTheta;
+
+            // Wrap and keep ordering continuous
+            const cycle = 4*Math.PI;
+            if (this.theta >= cycle){
+              this.theta -= cycle;
+              prevTheta -= cycle;
+            }
+
+            // A) event-driven firing schedule:
+            // Trigger events when theta crosses next firing angle.
+            // If we jumped over multiple angles, catch up in a small loop (bounded).
+            let guard = 0;
+            while (guard++ < 4 && this.orderN > 0){
+              const target = this.orderRad[this.fireIdx];
+              const crossed = (prevTheta < target && this.theta >= target);
+              if (!crossed) break;
+
+              // Fire event: intensity varies cycle-to-cycle
+              const intensity = 0.85 + 0.35*(0.5*this.rng.white() + 0.5);
+              const baseAmp = (0.55 + 0.65*load) * intensity;
+
+              // B) multi-band exhaust excitation
+              // Low chuff: slower, heavier
+              this.voices.trigger(0, baseAmp * (0.55 + 0.65*load), 0.010 + 0.010*(1-load));
+              // Mid bark: body resonance excitation
+              this.voices.trigger(1, baseAmp * (0.85 + 0.45*load), 0.018 + 0.010*(1-load));
+              // High rasp: very quick, turbulence accent
+              this.voices.trigger(2, baseAmp * (0.35 + 0.85*load), 0.030 + 0.020*(1-load));
+
+              // advance next
+              this.fireIdx++;
+              if (this.fireIdx >= this.orderN) this.fireIdx = 0;
+              prevTheta = target;
+            }
+
+            // Engine bed (kept subtle; realism comes from events/noise)
+            // Mild harmonic bed + mechanical texture
+            const hz = rpm/60;
+            this.ph1 += hz/sr; if (this.ph1 >= 1) this.ph1 -= 1;
+            this.ph2 += (2*hz)/sr; if (this.ph2 >= 1) this.ph2 -= 1;
+            this.ph3 += (3*hz)/sr; if (this.ph3 >= 1) this.ph3 -= 1;
+
+            let bed =
+              0.50*Math.sin(2*Math.PI*this.ph1) +
+              0.22*Math.sin(2*Math.PI*this.ph2) +
+              0.14*Math.sin(2*Math.PI*this.ph3);
+
+            const mech = this.mechLP.lp(this.rng.white());
+            bed += 0.10*(0.2 + 0.8*load) * mech;
+
+            bed = bed - this.engHP.lp(bed);
+            const engine = softclip(bed * 1.05);
+
+            // Pull current band excitations (envelopes)
+            const ex = this.voices.step();
+            const excLo = ex[0];
+            const excMid = ex[1];
+            const excHi = ex[2];
+
+            // Broadband turbulent source (pink), scaled by rasp and load
+            const white = this.rng.white();
+            const pink = this.pink.process(white);
+            const turb = p.rasp * (0.20 + 0.80*load) * pink;
+
+            // B) Low exhaust: chuff + hull coupling
+            let exLow = this.lowLP.lp(excLo + 0.15*turb);
+            let hull = this.hullBP.process(exLow) * p.hullAmt;
+            // hull also reduced with distance (far = less structure detail)
+            hull *= (0.35 + 0.65*near);
+
+            // B) Mid exhaust: dual formant resonances, driven by mid excitation + turbulence
+            let midDrive = (excMid + 0.35*turb);
+            let exMid = 0.85*this.form1.process(midDrive) + 0.65*this.form2.process(midDrive);
+
+            // Muffling (LP) depends on muffle and distance
+            const muffHz = 240 + (1 - p.muffle)*2300;
+            this.exhMuffleLP.setCutoff(muffHz * (1.0 - 0.35*far), sr);
+            exMid = this.exhMuffleLP.lp(exMid);
+
+            // B) High exhaust: high rasp + subtractive HP shaping (noise edge)
+            // Use subtractive high-pass: hi = x - lp(x)
+            const hiCut = 550 + 2200*(1 - highDamp);
+            this.highHP.setCutoff(hiCut, sr);
+            let hiDrive = (excHi + 0.75*turb);
+            const hiLP = this.highHP.lp(hiDrive);
+            let exHigh = (hiDrive - hiLP);
+
+            // Saturation for realism
+            exLow = softclip(exLow * (1.0 + 0.7*load));
+            exMid = softclip(exMid * (1.0 + 0.8*load));
+            exHigh = softclip(exHigh * (0.9 + 0.9*load));
+
+            // Clatter: sparse irregular transient ticks (reduced at distance)
+            let clack = 0;
+            const clackRate = (rpm/60) * 1.1;
+            this.phClack += clackRate/sr;
+            if (this.phClack >= 1) this.phClack -= 1;
+            if (this.phClack < 0.0025 && (white > 0.60)){
+              clack = this.rng.white() * 0.9;
+            }
+            clack = this.clackLP.lp(clack);
+            clack *= p.clatter * (0.15 + 0.85*load) * (0.25 + 0.75*near);
+
+            // C) Turbo: hiss dominates + faint blade tone + stochastic flutter
+            // Turbo center shifts with load and a slow jitter
+            const turboCenter = p.turboFreq * (0.80 + 0.45*load) * (0.96 + 0.06*this.rng.white());
+            this.turboBP.set(turboCenter, 7.0, sr);
+
+            const hiss = this.turboBP.process(white) * (0.25 + 0.90*p.turboHiss);
+            this.turboTonePh += (turboCenter*(0.85 + 0.12*load))/sr;
+            if (this.turboTonePh >= 1) this.turboTonePh -= 1;
+            const tone = Math.sin(2*Math.PI*this.turboTonePh);
+
+            // Flutter triggers more on rapid load changes downward; stochastic bursts
+            const dLoad = load - this.prevLoad;
+            this.prevLoad = load;
+            let flutterKick = 0;
+            if (dLoad < -0.010 && this.rng.white() > (0.4 - 0.3*load)) {
+              flutterKick = 1.0;
+            }
+            // Decay flutter envelope; low-pass makes it smoother
+            this.flutterEnv = Math.max(0, this.flutterEnv*0.992 + flutterKick*0.25);
+            const flutter = this.flutterLP.lp(this.flutterEnv);
+            const flutterGate = 1.0 - p.flutter*flutter; // dips on flutter
+            let turbo = 0.82*hiss + 0.18*tone;
+            turbo *= flutterGate;
+            turbo = turbo - this.turboHP.lp(turbo);
+            turbo = softclip(turbo * (0.65 + 0.70*load));
+
+            // E) Water: waves + current with wander
+            const chop = clamp(p.chop * (1.0 + 0.35*this.waterDrift), 0.01, 0.40);
+            this.phWave += chop/sr; if (this.phWave >= 1) this.phWave -= 1;
+            const waveLFO = 0.5*(Math.sin(2*Math.PI*this.phWave)+1);
+            const waveRand = 0.5*(this.rng.white()+1);
+            const waveEnv = this.waveEnvLP.lp(0.65*waveLFO + 0.35*waveRand);
+
+            let waveN = this.rng.white();
+            waveN = this.waveLP.lp(waveN);
+            waveN = waveN - this.waveHP.lp(waveN);
+            let waves = softclip(waveN * (0.55 + 1.05*waveEnv));
+
+            const cutoff = 900 + p.bright*5200;
+            this.currLP.setCutoff(cutoff, sr);
+            let currN = this.rng.white();
+            const currBody = this.currLP.lp(currN);
+            const currHiss = currN - this.currHP.lp(currN);
+            let current = 0.75*currBody + (0.25 + 0.45*p.bright)*currHiss;
+            current = softclip(current * 0.75);
+
+            // Distance shaping: reduce highs/waves slightly when far (cabin feel)
+            exHigh *= (0.35 + 0.65*near);
+            clack *= (0.35 + 0.65*near);
+            waves *= (0.80 + 0.20*near);
+
+            // Mix bands
+            let mix =
+              p.engine*engine +
+              p.exLow*exLow +
+              p.exMid*exMid +
+              p.exHigh*exHigh +
+              hull +
+              clack +
+              p.turbo*turbo +
+              p.waves*waves +
+              p.current*current;
+
+            // D) Early reflections: multi-tap delay; slightly more at distance
+            mix = this.spaceDelay.process(mix, spaceAmt, 0.012, 0.026, 0.048);
+
+            // Mild limiter + master
+            mix = softclip(mix * 1.25) * p.master;
+
+            L[i] = mix;
+            if (out.length > 1) R[i] = mix;
+          }
+          return true;
+        }
+      }
+
+      registerProcessor("boat-realistic", BoatProc);
+    `;
+  }
+
+  async function ensureAudio(){
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint:"playback" });
+    if (!audioCtx.audioWorklet) throw new Error("AudioWorklet not available. Open your GitHub Pages URL in Safari (HTTPS).");
+
+    const blob = new Blob([workletCode()], {type:"application/javascript"});
+    const url = URL.createObjectURL(blob);
+
+    setStatus("Loading worklet...");
+    await audioCtx.audioWorklet.addModule(url);
+    URL.revokeObjectURL(url);
+
+    node = new AudioWorkletNode(audioCtx, "boat-realistic", { numberOfOutputs:1, outputChannelCount:[2] });
+    node.connect(audioCtx.destination);
+
+    setStatus("Worklet ready.");
+    pushParams();
+  }
+
+  function pushParams(){
+    if (!node) return;
+    const p = readParams();
+    node.port.postMessage({ type:"params", params: p });
+  }
+
+  // Buttons
+  $("btnStart").addEventListener("click", async () => {
+    try {
+      await ensureAudio();
+      setStatus("AudioContext: " + audioCtx.state);
+      await audioCtx.resume();
+      setStatus("Running. AudioContext: " + audioCtx.state);
+      $("btnStart").disabled = true;
+      $("btnStop").disabled = false;
+    } catch (e) {
+      alert(e?.message || String(e));
+      setStatus("Start failed.");
+    }
+  });
+
+  $("btnStop").addEventListener("click", async () => {
+    if (audioCtx) await audioCtx.suspend();
+    $("btnStart").disabled = false;
+    $("btnStop").disabled = true;
+    setStatus("Stopped. AudioContext: " + (audioCtx ? audioCtx.state : "n/a"));
+  });
+
+  $("btnTest").addEventListener("click", async () => {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      await audioCtx.resume();
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      g.gain.value = 0.06;
+      o.frequency.value = 220;
+      o.connect(g).connect(audioCtx.destination);
+      o.start();
+      setTimeout(()=>{ o.stop(); o.disconnect(); g.disconnect(); }, 700);
+      setStatus("Test tone played. AudioContext: " + audioCtx.state);
+    } catch (e) {
+      alert(e?.message || String(e));
+      setStatus("Test tone failed.");
+    }
+  });
+
+  $("btnReset").addEventListener("click", async () => {
+    try {
+      setStatus("Resetting cache...");
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (const r of regs) await r.unregister();
+      }
+      if (window.caches) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      setStatus("Reset done. Reloading...");
+      location.reload();
+    } catch {
+      setStatus("Reset failed.");
+    }
+  });
+
+  // UI wiring
+  const sliderIds = [
+    "master","engine","exLow","exMid","exHigh","turbo","waves","current","distance",
+    "rpm","load","ripple","jitter","wander",
+    "muffle","formA","formB","formQ","rasp","clatter",
+    "turboFreq","turboHiss","flutter",
+    "space","hullHz","hullAmt",
+    "chop","waterWander","bright"
+  ];
+  sliderIds.forEach(id => $(id).addEventListener("input", () => { updateLabels(); pushParams(); }));
+
+  // Presets dropdown
+  function initPresets(){
+    const sel = $("preset");
+    PRESETS.forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p.id; opt.textContent = p.name;
+      sel.appendChild(opt);
+    });
+    sel.value = "trawler_i6";
+    applyPresetToUI(PRESETS.find(p=>p.id==="trawler_i6"));
+  }
+  $("preset").addEventListener("change", () => {
+    const p = PRESETS.find(x => x.id === $("preset").value);
+    if (p) applyPresetToUI(p);
+    pushParams();
+  });
+
+  initPresets();
+  updateLabels();
+  setStatus("Ready. Tap Test Tone, then Start.");
+</script>
+</body>
+</html>
